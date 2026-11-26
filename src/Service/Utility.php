@@ -31,6 +31,8 @@ class Utility implements InvokableService
     const WITHOUT_PROJECT    = '*without_project*';
     const NO_PROJECT_CHANNEL = '*no_project_channel*';
     const ALL                = '*all*';
+    const TYPE_REVIEW        = 'review';
+    const TYPE_SUBMIT        = 'submit';
 
     const NOTIFY_AUTHOR                    = 'author';
     const NOTIFY_REVIEWERS                 = 'reviewers';
@@ -211,20 +213,30 @@ class Utility implements InvokableService
         );
     }
 
-    public function getProjectMappings(array $projects, array $mappings, bool $purePrivate = false): array
+    private function getChannels($mapping, string $type): array
+    {
+        $mapping = (array) $mapping;
+        if (isset($mapping[self::TYPE_REVIEW]) || isset($mapping[self::TYPE_SUBMIT])) {
+            return (array) ($mapping[$type] ?? []);
+        }
+        return $mapping;
+    }
+
+    public function getProjectMappings(array $projects, array $mappings, string $type, bool $purePrivate = false): array
     {
         $result = [];
         foreach (array_keys($projects) as $project) {
-            foreach ($mappings[$project] ?? [] as $channel) {
+            foreach ($this->getChannels($mappings[$project] ?? [], $type) as $channel) {
                 $result[$channel][] = $project;
             }
         }
         if ($purePrivate) {
             return $result;
         }
-        $extra = $mappings[self::ALL] ?? [];
+        $extra = $this->getChannels($mappings[self::ALL] ?? [], $type);
         if (!$result) {
-            $extra = array_merge($mappings[$projects ? self::NO_PROJECT_CHANNEL : self::WITHOUT_PROJECT] ?? [], $extra);
+            $fallback = $mappings[$projects ? self::NO_PROJECT_CHANNEL : self::WITHOUT_PROJECT] ?? [];
+            $extra    = array_merge($this->getChannels($fallback, $type), $extra);
         }
         foreach ($extra as $channel) {
             $result[$channel] = $result[$channel] ?? [];
