@@ -93,6 +93,16 @@ class Activity extends AbstractEventListener
         }
     }
 
+    private function getReviewId($activity): ?string
+    {
+        foreach ((array) $activity->getRawValue('streams') as $stream) {
+            if (str_starts_with((string) $stream, 'review-')) {
+                return substr($stream, strlen('review-'));
+            }
+        }
+        return null;
+    }
+
     public function handleCommit(Event $event)
     {
         $change   = $event->getParam('change');
@@ -105,6 +115,20 @@ class Activity extends AbstractEventListener
             if (!$change instanceof Change) {
                 $change = $this->services->get(IDao::CHANGE_DAO)->fetchById($event->getParam(IReview::FIELD_ID), $p4Admin);
                 $event->setParam('change', $change);
+            }
+            $reviewId = $this->getReviewId($activity);
+            if ($reviewId) {
+                $review = $this->services->get(IDao::REVIEW_DAO)->fetchByIdUnrestricted($reviewId, $p4Admin);
+                [$lock, $maxWait] = $this->getLock("review-" . $reviewId, $p4Admin);
+                $lock->withLock(
+                    function () use ($review, $change, $activity, $p4Admin) {
+                        $reviewChange = $this->services->get(IDao::CHANGE_DAO)
+                            ->fetchById($review->getChanges()[0], $p4Admin);
+                        $this->discord->handleThreadedMessage($reviewChange, $activity, $review, $change);
+                    },
+                    $maxWait
+                );
+                return;
             }
             $matches = $this->services->get(Keywords::SERVICE)->getMatches($change->getRawValue('Description'));
             if ($matches && $matches[IReview::FIELD_ID]) {

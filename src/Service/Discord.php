@@ -9,7 +9,6 @@
 namespace Discord\Service;
 
 use Activity\Model\Activity;
-use Activity\Model\IActivity;
 use Application\Config\IConfigDefinition as IDef;
 use Application\Config\IDao;
 use Application\Config\Services;
@@ -34,7 +33,6 @@ class Discord implements InvokableService
     const API           = 'https://discord.com/api/v10';
     const CONTENT_LIMIT = 2000;
     const THREAD_LIMIT  = 100;
-    const COMMITTED     = 'committed';
 
     private $services;
     private $logger;
@@ -79,7 +77,12 @@ class Discord implements InvokableService
         $this->saveThreads($topic, $threads);
     }
 
-    public function handleThreadedMessage(Change $change, Activity $activity, Review $review): void
+    public function handleThreadedMessage(
+        Change $change,
+        Activity $activity,
+        Review $review,
+        Change $commit = null
+    ): void
     {
         $topic    = $this->getTopic($change, $review);
         $projects = $this->getProjects($change, $review);
@@ -99,10 +102,9 @@ class Discord implements InvokableService
                 }
             }
             if ($threadId) {
-                $text      = $this->utility->buildActivityReply($activity, (array) $projects, $linkedProjects);
-                $committed = $activity->getRawValue(IActivity::ACTION) === self::COMMITTED;
-                if ($committed) {
-                    $text .= $this->utility->buildCommitLink($review);
+                $text = $this->utility->buildActivityReply($activity, (array) $projects, $linkedProjects);
+                if ($commit) {
+                    $text .= $this->utility->buildCommitLink($commit);
                 }
                 $this->post(
                     "/channels/$threadId/messages",
@@ -111,7 +113,7 @@ class Discord implements InvokableService
                         'allowed_mentions' => ['parse' => []],
                     ]
                 );
-                if ($committed) {
+                if ($commit) {
                     $this->post("/channels/$threadId", ['archived' => true], Request::METHOD_PATCH);
                 }
             }

@@ -75,15 +75,14 @@ class Utility implements InvokableService
         return $basePath . ($review ? "reviews/" . $review->getId() : "changes/" . $change->getId());
     }
 
-    public function buildCommitLink(Review $review): string
+    public function buildCommitLink(Change $commit): string
     {
-        $commits = $review->getCommits();
-        $change  = end($commits);
-        if (!$change) {
-            return '';
-        }
-        $basePath = "/" . (P4_SERVER_ID ? P4_SERVER_ID . "/" : '');
-        return sprintf("\nCommitted in [change %s](%s%schanges/%s)", $change, $this->getHostName(), $basePath, $change);
+        return sprintf(
+            "\nCommitted in [change %s](%s%s)",
+            $commit->getId(),
+            $this->getHostName(),
+            $this->buildLink($commit)
+        );
     }
 
     public function buildTitle(Change $change, Review $review = null, Activity $activity = null): string
