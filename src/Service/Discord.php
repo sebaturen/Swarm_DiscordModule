@@ -68,7 +68,7 @@ class Discord implements InvokableService
         $projects = $projects ?? $this->getProjects($change, $review);
         $mentions = $this->utility->buildMentions($this->config, $change, $projects, $review);
         $threads  = [];
-        foreach ($this->getChannels($projects) as $channel => $linkedProjects) {
+        foreach ($this->getChannels($projects, $review) as $channel => $linkedProjects) {
             $threadId = $this->postSummary($change, $review, $activity, $projects, $linkedProjects, $channel, $mentions);
             if ($threadId) {
                 $threads[$channel] = ['threadId' => $threadId];
@@ -88,7 +88,7 @@ class Discord implements InvokableService
         }
         $threads = $dao->exists($topic, $p4) ? $dao->fetchById($topic, $p4)->getThreadIds() : [];
         $created = [];
-        foreach ($this->getChannels($projects) as $channel => $linkedProjects) {
+        foreach ($this->getChannels($projects, $review) as $channel => $linkedProjects) {
             $threadId = $threads[$channel]['threadId'] ?? null;
             if (!$threadId && $this->isAllowed($change)) {
                 $threadId = $this->postSummary($change, $review, null, $projects, $linkedProjects, $channel);
@@ -136,7 +136,11 @@ class Discord implements InvokableService
         $thread = $this->post(
             "/channels/$channel/messages/$messageId/threads",
             [
-                'name'                  => mb_substr($title, 0, self::THREAD_LIMIT),
+                'name'                  => mb_substr(
+                    sprintf("[%s] %s", $change->getId(), strtok(trim((string) $change->getDescription()), "\n")),
+                    0,
+                    self::THREAD_LIMIT
+                ),
                 'auto_archive_duration' => 10080,
             ]
         );
@@ -213,11 +217,12 @@ class Discord implements InvokableService
         return $change->getType() === Change::PUBLIC_CHANGE || !empty($this->config['bypass_restricted_changelist']);
     }
 
-    private function getChannels(?array $projects): array
+    private function getChannels(?array $projects, ?Review $review): array
     {
         return $this->utility->getProjectMappings(
             (array) $projects,
             $this->config['project_channels'] ?? [],
+            $review ? Utility::TYPE_REVIEW : Utility::TYPE_SUBMIT,
             $this->purePrivate
         );
     }
