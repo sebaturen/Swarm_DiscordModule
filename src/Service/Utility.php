@@ -78,7 +78,7 @@ class Utility implements InvokableService
     public function buildCommitLink(Change $commit): string
     {
         return sprintf(
-            "\nCommitted in [change %s](%s%s)",
+            "Review submitted in [change %s](%s%s)",
             $commit->getId(),
             $this->getHostName(),
             $this->buildLink($commit)

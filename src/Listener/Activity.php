@@ -123,6 +123,7 @@ class Activity extends AbstractEventListener
                         $reviewChange = $this->services->get(IDao::CHANGE_DAO)
                             ->fetchById($review->getChanges()[0], $p4Admin);
                         $this->discord->handleThreadedMessage($reviewChange, $activity, $review, $change);
+                        $this->discord->handleCreateMessage($change, $activity);
                     },
                     $maxWait
                 );

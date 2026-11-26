@@ -102,10 +102,9 @@ class Discord implements InvokableService
                 }
             }
             if ($threadId) {
-                $text = $this->utility->buildActivityReply($activity, (array) $projects, $linkedProjects);
-                if ($commit) {
-                    $text .= $this->utility->buildCommitLink($commit);
-                }
+                $text = $commit
+                    ? $this->utility->buildCommitLink($commit)
+                    : $this->utility->buildActivityReply($activity, (array) $projects, $linkedProjects);
                 $this->post(
                     "/channels/$threadId/messages",
                     [
@@ -183,6 +182,10 @@ class Discord implements InvokableService
             $client->setOptions($options);
 
             $response = $client->dispatch($request);
+            if ($response->getStatusCode() === 429) {
+                sleep((int) ceil(json_decode($response->getBody(), true)['retry_after'] ?? 1));
+                $response = $client->dispatch($request);
+            }
             if (!$response->isSuccess()) {
                 $this->logger->err(
                     sprintf(
