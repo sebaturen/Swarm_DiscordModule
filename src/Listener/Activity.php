@@ -93,14 +93,13 @@ class Activity extends AbstractEventListener
         }
     }
 
-    private function getReviewId($activity): ?string
+    private function findReview(Change $change, $p4Admin): ?Review
     {
-        foreach ((array) $activity->getRawValue('streams') as $stream) {
-            if (str_starts_with((string) $stream, 'review-')) {
-                return substr($stream, strlen('review-'));
-            }
-        }
-        return null;
+        $reviews = $this->services->get(IDao::REVIEW_DAO)->fetchAll(
+            [IReview::FETCH_BY_CHANGE => $change->getOriginalId()],
+            $p4Admin
+        );
+        return $reviews->count() ? $reviews->first() : null;
     }
 
     public function handleCommit(Event $event)
@@ -116,10 +115,9 @@ class Activity extends AbstractEventListener
                 $change = $this->services->get(IDao::CHANGE_DAO)->fetchById($event->getParam(IReview::FIELD_ID), $p4Admin);
                 $event->setParam('change', $change);
             }
-            $reviewId = $this->getReviewId($activity);
-            if ($reviewId) {
-                $review = $this->services->get(IDao::REVIEW_DAO)->fetchByIdUnrestricted($reviewId, $p4Admin);
-                [$lock, $maxWait] = $this->getLock("review-" . $reviewId, $p4Admin);
+            $review = $this->findReview($change, $p4Admin);
+            if ($review) {
+                [$lock, $maxWait] = $this->getLock("review-" . $review->getId(), $p4Admin);
                 $lock->withLock(
                     function () use ($review, $change, $activity, $p4Admin) {
                         $reviewChange = $this->services->get(IDao::CHANGE_DAO)
