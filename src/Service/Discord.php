@@ -9,6 +9,7 @@
 namespace Discord\Service;
 
 use Activity\Model\Activity;
+use Activity\Model\IActivity;
 use Application\Config\IConfigDefinition as IDef;
 use Application\Config\IDao;
 use Application\Config\Services;
@@ -33,6 +34,7 @@ class Discord implements InvokableService
     const API           = 'https://discord.com/api/v10';
     const CONTENT_LIMIT = 2000;
     const THREAD_LIMIT  = 100;
+    const COMMITTED     = 'committed';
 
     private $services;
     private $logger;
@@ -97,7 +99,11 @@ class Discord implements InvokableService
                 }
             }
             if ($threadId) {
-                $text = $this->utility->buildActivityReply($activity, (array) $projects, $linkedProjects);
+                $text      = $this->utility->buildActivityReply($activity, (array) $projects, $linkedProjects);
+                $committed = $activity->getRawValue(IActivity::ACTION) === self::COMMITTED;
+                if ($committed) {
+                    $text .= $this->utility->buildCommitLink($review);
+                }
                 $this->post(
                     "/channels/$threadId/messages",
                     [
@@ -105,6 +111,9 @@ class Discord implements InvokableService
                         'allowed_mentions' => ['parse' => []],
                     ]
                 );
+                if ($committed) {
+                    $this->post("/channels/$threadId", ['archived' => true], Request::METHOD_PATCH);
+                }
             }
         }
         $this->saveThreads($topic, $created);
@@ -147,11 +156,11 @@ class Discord implements InvokableService
         return $thread['id'] ?? null;
     }
 
-    private function post(string $path, array $body): array
+    private function post(string $path, array $body, string $method = Request::METHOD_POST): array
     {
         try {
             $request = new Request();
-            $request->setMethod(Request::METHOD_POST);
+            $request->setMethod($method);
             $request->setUri(self::API . $path);
             $request->getHeaders()->addHeaders(
                 [
@@ -175,8 +184,9 @@ class Discord implements InvokableService
             if (!$response->isSuccess()) {
                 $this->logger->err(
                     sprintf(
-                        "%s: POST %s failed with %s: %s",
+                        "%s: %s %s failed with %s: %s",
                         self::LOG_PREFIX,
+                        $method,
                         $path,
                         $response->getStatusCode(),
                         $response->getBody()
